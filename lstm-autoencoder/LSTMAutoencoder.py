@@ -34,8 +34,12 @@ class LSTMAutoencoder(object):
     #inputs = [tf.squeeze(t, [1]) for t in tf.split(p_input, max_len, 1)]
     #inputs = tf.unstack(p_input, max_len, 1)
     inputs = p_input
-    self.batch_num = tf.shape(p_input)[0]
-    self.elem_num = inputs[0].get_shape().as_list()[1]
+    self.seq_len = tf.placeholder(tf.int32, [None])
+    self.gather_index = tf.placeholder(tf.int32, [None])
+
+    self.batch_num = tf.shape(inputs)[0]
+    batch_size = inputs.get_shape().as_list()[0]
+    self.elem_num = inputs.get_shape().as_list()[2]
     self.global_step = tf.Variable(0, name="global_step", trainable=False)
     if cell is None:
       self._enc_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_num)
@@ -46,7 +50,7 @@ class LSTMAutoencoder(object):
 
     with tf.variable_scope('encoder'):
       self.z_codes, self.enc_state = tf.nn.dynamic_rnn(
-        self._enc_cell, inputs, dtype=tf.float32)
+        self._enc_cell, inputs, self.seq_len, dtype=tf.float32)
 
     with tf.variable_scope('decoder') as vs:
       dec_weight_ = tf.Variable(
@@ -79,26 +83,34 @@ class LSTMAutoencoder(object):
 
       else:
         dec_state = self.enc_state
-        dec_input_ = tf.zeros([tf.shape(inputs)[0],tf.shape(inputs)[2]], dtype=tf.float32)
+        shape_list = inputs.get_shape().as_list()
+        dec_input_ = tf.zeros([self.batch_num,shape_list[2]], dtype=tf.float32)
         dec_outputs = []
-        for step in range(inputs.get_shape().as_list()[1]):
+        for step in range(shape_list[1]):
           if step>0:
             vs.reuse_variables()
           dec_input_, dec_state = self._dec_cell(dec_input_, dec_state)
-          dec_input_ = tf.matmul(dec_input_, dec_weight_) + dec_bias_
+          dec_input_ = tf.sigmoid(tf.matmul(dec_input_, dec_weight_) + dec_bias_)
+          #dec_input_ = tf.matmul(dec_input_, dec_weight_) + dec_bias_
           dec_outputs.append(dec_input_)
         if reverse:
           dec_outputs = dec_outputs[::-1]
         self.output_ = tf.transpose(tf.stack(dec_outputs), [1,0,2])
 
-    #self.input_ = tf.transpose(tf.stack(inputs), [1,0,2])
-    self.input_ = inputs
+    # Indexing
+    self.input_ = tf.gather(tf.reshape(
+      inputs, [-1, self.elem_num]), self.gather_index)
+    self.output_ = tf.gather(tf.reshape(
+      self.output_, [-1, self.elem_num]), self.gather_index)
+
+    #self.input_ = inputs
     self.loss = tf.reduce_mean(tf.square(self.input_ - self.output_))
 
     if optimizer is None:
-      optimizer = tf.train.AdamOptimizer(0.001)
+      #optimizer = tf.train.AdamOptimizer(0.001)
+      optimizer = tf.train.RMSPropOptimizer(0.001)
       grads_and_vars = optimizer.compute_gradients(self.loss, aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE)
-      grads_and_vars = [(tf.clip_by_norm(g, 4), v)
+      grads_and_vars = [(tf.clip_by_norm(g, 10), v)
                           for g, v in grads_and_vars if g is not None]
       self.train = optimizer.apply_gradients(grads_and_vars, name="train_op", global_step=self.global_step)
     else:
