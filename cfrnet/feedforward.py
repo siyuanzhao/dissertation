@@ -5,12 +5,12 @@ from sklearn.metrics import roc_auc_score
 
 hidden_size = 500
 output_size = 1
-l2_lambda = 0.6
+l2_lambda = 0
 ps = 303899
-embeddings = False
-#embeddings = True
-learning_rate = 0.01
-epochs = 300
+#embeddings = False
+embeddings = True
+learning_rate = 0.001
+epochs = 200
 batch_size = 30
 eval_interval = 20
 
