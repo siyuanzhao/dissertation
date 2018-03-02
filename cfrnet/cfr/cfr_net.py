@@ -13,7 +13,7 @@ class cfr_net(object):
     creates an object containing relevant TF nodes as member variables.
     """
 
-    def __init__(self, x, t, y_ , p_t, FLAGS, r_alpha, r_lambda, do_in, do_out, dims):
+    def __init__(self, x, t, y_, p_t, FLAGS, r_alpha, r_lambda, do_in, do_out, dims):
         self.variables = {}
         self.wd_loss = 0
 
@@ -22,7 +22,7 @@ class cfr_net(object):
         else:
             self.nonlin = tf.nn.relu
 
-        self._build_graph(x, t, y_ , p_t, FLAGS, r_alpha, r_lambda, do_in, do_out, dims)
+        self._build_graph(x, t, y_, p_t, FLAGS, r_alpha, r_lambda, do_in, do_out, dims)
 
     def _add_variable(self, var, name):
         ''' Adds variables to the internal track-keeper '''
@@ -48,7 +48,7 @@ class cfr_net(object):
         self.wd_loss += wd*tf.nn.l2_loss(var)
         return var
 
-    def _build_graph(self, x, t, y_ , p_t, FLAGS, r_alpha, r_lambda, do_in, do_out, dims):
+    def _build_graph(self, x, t, y_, p_t, FLAGS, r_alpha, r_lambda, do_in, do_out, dims):
         """
         Constructs a TensorFlow subgraph for counterfactual regression.
         Sets the following member variables (to TF nodes):
@@ -76,7 +76,8 @@ class cfr_net(object):
         dim_in = dims[1]
         dim_out = dims[2]
 
-        weights_in = []; biases_in = []
+        weights_in = []
+        biases_in = []
 
         if FLAGS.n_in == 0 or (FLAGS.n_in == 1 and FLAGS.varsel):
             dim_in = dim_input
@@ -218,17 +219,23 @@ class cfr_net(object):
         self.h_rep_norm = h_rep_norm
 
     def _build_output(self, h_input, t, dim_in, dim_out, do_out, FLAGS):
-        h_out = [h_input]
         dims = [dim_in] + ([dim_out]*FLAGS.n_out)
 
         weights_out = []
         biases_out = []
 
+        # intermediate layers
+        mo = self._create_variable_with_weight_decay(
+            tf.random_normal([dims[0], dims[0]],
+                             stddev=FLAGS.weight_init/np.sqrt(dims[0])),'w_mid_%d' % 1, 1.0)
+        mb = tf.Variable(tf.zeros([1,dims[0]]))
+        h_input = self.nonlin(tf.matmul(h_input, mo) + mb)
+        h_out = [h_input]
+        # output layers
         for i in range(0, FLAGS.n_out):
             wo = self._create_variable_with_weight_decay(
                 tf.random_normal([dims[i], dims[i+1]],
-                                 stddev=FLAGS.weight_init/np.sqrt(dims[i])),
-                'w_out_%d' % i, 1.0)
+                                 stddev=FLAGS.weight_init/np.sqrt(dims[i])),'w_out_%d' % i, 1.0)
             weights_out.append(wo)
 
             biases_out.append(tf.Variable(tf.zeros([1,dim_out])))
@@ -259,7 +266,6 @@ class cfr_net(object):
             yt = tf.matmul(h_pred, weights_pred)+bias_pred
             # prediction in control
             yc = tf.matmul(h_input, weights_pred)+bias_pred
-
             y = t*yt + (1-t)*yc
         else:
             y = tf.matmul(h_pred, weights_pred)+bias_pred
