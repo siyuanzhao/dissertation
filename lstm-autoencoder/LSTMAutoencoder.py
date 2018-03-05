@@ -16,7 +16,8 @@ class LSTMAutoencoder(object):
 
   def __init__(self, hidden_num, p_input, max_len,
                cell=None, optimizer=None, reverse=False,
-               decode_without_input=False):
+               decode_without_input=False, embedding_size=10, trainable_embed=False,
+               ps_cnt=None):
     """
     Args:
       hidden_num : number of hidden elements of each LSTM unit.
@@ -39,7 +40,7 @@ class LSTMAutoencoder(object):
 
     self.batch_num = tf.shape(inputs)[0]
     batch_size = inputs.get_shape().as_list()[0]
-    self.elem_num = inputs.get_shape().as_list()[2]
+    feature_num = inputs.get_shape().as_list()[2]
     self.global_step = tf.Variable(0, name="global_step", trainable=False)
     if cell is None:
       self._enc_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_num)
@@ -48,9 +49,20 @@ class LSTMAutoencoder(object):
       self._enc_cell = cell
       self._dec_cell = cell
 
+    if trainable_embed:
+      self.elem_num = embedding_size*feature_num
+      self.sq_embed_idx = tf.placeholder(tf.int32, [None, max_len])
+      W = tf.get_variable('W', shape=[ps_cnt+1, embedding_size],
+                          initializer=tf.contrib.layers.xavier_initializer())
+      sq_embed = tf.nn.embedding_lookup(W, self.sq_embed_idx)
+      cell_input = tf.reshape(tf.expand_dims(sq_embed, -2) * tf.expand_dims(p_input, -1),
+                                 [-1, max_len, self.elem_num])
+    else:
+      self.elem_num = feature_num
+      cell_input = p_input
     with tf.variable_scope('encoder'):
       self.z_codes, self.enc_state = tf.nn.dynamic_rnn(
-        self._enc_cell, inputs, self.seq_len, dtype=tf.float32)
+        self._enc_cell, cell_input, self.seq_len, dtype=tf.float32)
 
     with tf.variable_scope('decoder') as vs:
       dec_weight_ = tf.Variable(
@@ -84,7 +96,7 @@ class LSTMAutoencoder(object):
       else:
         dec_state = self.enc_state
         shape_list = inputs.get_shape().as_list()
-        dec_input_ = tf.zeros([self.batch_num,shape_list[2]], dtype=tf.float32)
+        dec_input_ = tf.zeros([self.batch_num,self.elem_num], dtype=tf.float32)
         dec_outputs = []
         for step in range(shape_list[1]):
           if step>0:
@@ -99,7 +111,7 @@ class LSTMAutoencoder(object):
 
     # Indexing
     self.input_ = tf.gather(tf.reshape(
-      inputs, [-1, self.elem_num]), self.gather_index)
+      cell_input, [-1, self.elem_num]), self.gather_index)
     self.output_ = tf.gather(tf.reshape(
       self.output_, [-1, self.elem_num]), self.gather_index)
 
