@@ -60,6 +60,7 @@ tf.app.flags.DEFINE_string('rname', '../LSTM-autoencoder/result.pkl', """The fil
 tf.app.flags.DEFINE_boolean('rnn', 0, """Whether to use rnn to extract features from student logs. """)
 tf.app.flags.DEFINE_string('ps', '', """The problem set id""")
 tf.app.flags.DEFINE_integer('hidden_num', 50, """The size of hidden layer in rnn""")
+tf.app.flags.DEFINE_boolean('trainable_embed', 0, """when rnn = 1, whether to use embeddings to represent problem sets""")
 
 if FLAGS.sparse:
     import scipy.sparse as sparse
@@ -72,7 +73,7 @@ if FLAGS.debug:
 
 def train(CFR, sess, train_step, D, I_valid, D_test, logfile, i_exp,
           user_ids=None, test_user_ids=None, x_dict=None, len_dict=None, p_input=None,
-          seq_len=None):
+          seq_len=None, ps_dict=None, sq_embed_idx=None):
     """ Trains a CFR model on supplied data """
 
     ''' Train/validation split '''
@@ -89,28 +90,48 @@ def train(CFR, sess, train_step, D, I_valid, D_test, logfile, i_exp,
         # load all data
         l = []
         train_all_len = []
+        train_all_embed = []
         for ite in user_ids:
             l.append(x_dict[ite])
             train_all_len.append(len_dict[ite])
+            if FLAGS.trainable_embed:
+                train_all_embed.append(ps_dict[ite])
         train_all_x = np.stack(l, axis=0)
+        if FLAGS.trainable_embed:
+            train_all_embed = np.stack(train_all_embed, axis=0)
 
         l = []
         test_all_len = []
+        test_all_embed = []
         for ite in test_user_ids:
             l.append(x_dict[ite])
             test_all_len.append(len_dict[ite])
+            if FLAGS.trainable_embed:
+                test_all_embed.append(ps_dict[ite])
         test_all_x = np.stack(l, axis=0)
+        if FLAGS.trainable_embed:
+            test_all_embed = np.stack(test_all_embed, axis=0)
         
         l = []
         train_len = []
+        train_embed = []
         for ite in user_ids[I_train]:
             l.append(x_dict[ite])
             train_len.append(len_dict[ite])
+            if FLAGS.trainable_embed:
+                train_embed.append(ps_dict[ite])
         train_x = np.stack(l, axis=0)
-            
-        dict_factual = {p_input: train_x, seq_len: train_len, CFR.t: D['t'][I_train,:], CFR.y_: D['yf'][I_train,:],
-                        CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
-                        CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated}
+        if FLAGS.trainable_embed:
+            train_embed = np.stack(train_embed, axis=0)
+        if FLAGS.trainable_embed:
+            dict_factual = {p_input: train_x, seq_len: train_len, sq_embed_idx:train_embed, CFR.t: D['t'][I_train,:], CFR.y_: D['yf'][I_train,:],
+                            CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
+                            CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated}
+
+        else:
+            dict_factual = {p_input: train_x, seq_len: train_len, CFR.t: D['t'][I_train,:], CFR.y_: D['yf'][I_train,:],
+                            CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
+                            CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated}
     else:
         dict_factual = {CFR.x: D['x'][I_train,:], CFR.t: D['t'][I_train,:], CFR.y_: D['yf'][I_train,:],
                         CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
@@ -120,21 +141,26 @@ def train(CFR, sess, train_step, D, I_valid, D_test, logfile, i_exp,
         if FLAGS.rnn:
             l = []
             valid_len = []
+            valid_embed = []
             for ite in user_ids[I_valid]:
                 l.append(x_dict[ite])
                 valid_len.append(len_dict[ite])
+                if FLAGS.trainable_embed:
+                    valid_embed.append(ps_dict[ite])
             valid_x = np.stack(l, axis=0)
-            dict_valid = {p_input: valid_x, seq_len: valid_len, CFR.t: D['t'][I_valid,:], CFR.y_: D['yf'][I_valid,:],
-                          CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
-                          CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated}
+            if FLAGS.trainable_embed:
+                dict_valid = {p_input: valid_x, seq_len: valid_len, sq_embed_idx: valid_embed,
+                              CFR.t: D['t'][I_valid,:], CFR.y_: D['yf'][I_valid,:],
+                              CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
+                              CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated}
+            else:
+                dict_valid = {p_input: valid_x, seq_len: valid_len, CFR.t: D['t'][I_valid,:], CFR.y_: D['yf'][I_valid,:],
+                              CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
+                              CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated}
         else:
             dict_valid = {CFR.x: D['x'][I_valid,:], CFR.t: D['t'][I_valid,:], CFR.y_: D['yf'][I_valid,:],
                           CFR.do_in: 1.0, CFR.do_out: 1.0, CFR.r_alpha: FLAGS.p_alpha,
                           CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated}
-
-    if D['HAVE_TRUTH']:
-        dict_cfactual = {CFR.x: D['x'][I_train,:], CFR.t: 1-D['t'][I_train,:], CFR.y_: D['ycf'][I_train,:],
-                         CFR.do_in: 1.0, CFR.do_out: 1.0}
 
     ''' Initialize TensorFlow variables '''
     sess.run(tf.global_variables_initializer())
@@ -176,17 +202,27 @@ def train(CFR, sess, train_step, D, I_valid, D_test, logfile, i_exp,
             user_batch = user_ids[I_train][I]
             l = []
             batch_len = []
+            batch_embed = []
             for ite in user_batch:
                 l.append(x_dict[ite])
                 batch_len.append(len_dict[ite])
+                if FLAGS.trainable_embed:
+                    batch_embed.append(ps_dict[ite])
             x_batch = np.stack(l, axis=0)
         ''' Do one step of gradient descent '''
         if not objnan:
             if FLAGS.rnn:
-                sess.run(train_step,
-                         feed_dict={p_input: x_batch, seq_len: batch_len, CFR.t: t_batch,
-                                    CFR.y_: y_batch, CFR.do_in: FLAGS.dropout_in, CFR.do_out: FLAGS.dropout_out,
-                                    CFR.r_alpha: FLAGS.p_alpha, CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated})
+                if FLAGS.trainable_embed:
+                    sess.run(train_step,
+                             feed_dict={p_input: x_batch, seq_len: batch_len, sq_embed_idx: batch_embed, CFR.t: t_batch,
+                                        CFR.y_: y_batch, CFR.do_in: FLAGS.dropout_in, CFR.do_out: FLAGS.dropout_out,
+                                        CFR.r_alpha: FLAGS.p_alpha, CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated})
+
+                else:
+                    sess.run(train_step,
+                             feed_dict={p_input: x_batch, seq_len: batch_len, CFR.t: t_batch,
+                                        CFR.y_: y_batch, CFR.do_in: FLAGS.dropout_in, CFR.do_out: FLAGS.dropout_out,
+                                        CFR.r_alpha: FLAGS.p_alpha, CFR.r_lambda: FLAGS.p_lambda, CFR.p_t: p_treated})
             else:
                 sess.run(train_step, feed_dict={CFR.x: x_batch, CFR.t: t_batch, \
                                                 CFR.y_: y_batch, CFR.do_in: FLAGS.dropout_in, CFR.do_out: FLAGS.dropout_out, \
@@ -219,8 +255,12 @@ def train(CFR, sess, train_step, D, I_valid, D_test, logfile, i_exp,
 
             if FLAGS.loss == 'log':
                 if FLAGS.rnn:
-                    y_pred = sess.run(CFR.output, feed_dict={p_input: x_batch, seq_len: batch_len,
-                                                            CFR.t: t_batch, CFR.do_in: 1.0, CFR.do_out: 1.0})
+                    if FLAGS.trainable_embed:
+                        y_pred = sess.run(CFR.output, feed_dict={p_input: x_batch, seq_len: batch_len, sq_embed_idx: batch_embed,
+                                                                 CFR.t: t_batch, CFR.do_in: 1.0, CFR.do_out: 1.0})
+                    else:
+                        y_pred = sess.run(CFR.output, feed_dict={p_input: x_batch, seq_len: batch_len,
+                                                                 CFR.t: t_batch, CFR.do_in: 1.0, CFR.do_out: 1.0})
 
                 else:
                     y_pred = sess.run(CFR.output, feed_dict={CFR.x: x_batch,
@@ -238,10 +278,16 @@ def train(CFR, sess, train_step, D, I_valid, D_test, logfile, i_exp,
         ''' Compute predictions every M iterations '''
         if (FLAGS.pred_output_delay > 0 and i % FLAGS.pred_output_delay == 0) or i==FLAGS.iterations-1:
             if FLAGS.rnn:
-                y_pred_f = sess.run(CFR.output, feed_dict={p_input: train_all_x, seq_len: train_all_len,
-                                                           CFR.t: D['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
-                y_pred_cf = sess.run(CFR.output, feed_dict={p_input: train_all_x, seq_len: train_all_len,
-                                                            CFR.t: 1-D['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                if FLAGS.trainable_embed:
+                    y_pred_f = sess.run(CFR.output, feed_dict={p_input: train_all_x, seq_len: train_all_len,sq_embed_idx: train_all_embed,
+                                                               CFR.t: D['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                    y_pred_cf = sess.run(CFR.output, feed_dict={p_input: train_all_x, seq_len: train_all_len,sq_embed_idx: train_all_embed,
+                                                                CFR.t: 1-D['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                else:
+                    y_pred_f = sess.run(CFR.output, feed_dict={p_input: train_all_x, seq_len: train_all_len,
+                                                               CFR.t: D['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                    y_pred_cf = sess.run(CFR.output, feed_dict={p_input: train_all_x, seq_len: train_all_len,
+                                                                CFR.t: 1-D['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
 
             else:
                 y_pred_f = sess.run(CFR.output, feed_dict={CFR.x: D['x'], \
@@ -252,26 +298,24 @@ def train(CFR, sess, train_step, D, I_valid, D_test, logfile, i_exp,
 
             if D_test is not None:
                 if FLAGS.rnn:
-                    y_pred_f_test = sess.run(CFR.output, feed_dict={p_input: test_all_x, seq_len: test_all_len,
-                                                                    CFR.t: D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
-                    y_pred_cf_test = sess.run(CFR.output, feed_dict={p_input: test_all_x, seq_len: test_all_len,
-                                                                     CFR.t: 1-D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                    if FLAGS.trainable_embed:
+                        y_pred_f_test = sess.run(CFR.output, feed_dict={p_input: test_all_x, seq_len: test_all_len,
+                                                                        sq_embed_idx: test_all_embed,
+                                                                        CFR.t: D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                        y_pred_cf_test = sess.run(CFR.output, feed_dict={p_input: test_all_x, seq_len: test_all_len,
+                                                                        sq_embed_idx: test_all_embed,
+                                                                         CFR.t: 1-D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                    else:
+                        y_pred_f_test = sess.run(CFR.output, feed_dict={p_input: test_all_x, seq_len: test_all_len,
+                                                                        CFR.t: D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
+                        y_pred_cf_test = sess.run(CFR.output, feed_dict={p_input: test_all_x, seq_len: test_all_len,
+                                                                         CFR.t: 1-D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
                 else:
                     y_pred_f_test = sess.run(CFR.output, feed_dict={CFR.x: D_test['x'], \
                                                                     CFR.t: D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
                     y_pred_cf_test = sess.run(CFR.output, feed_dict={CFR.x: D_test['x'], \
                                                                      CFR.t: 1-D_test['t'], CFR.do_in: 1.0, CFR.do_out: 1.0})
                 preds_test.append(np.concatenate((y_pred_f_test, y_pred_cf_test),axis=1))
-
-            if FLAGS.save_rep and i_exp == 1:
-                reps_i = sess.run([CFR.h_rep], feed_dict={CFR.x: D['x'], \
-                    CFR.do_in: 1.0, CFR.do_out: 0.0})
-                reps.append(reps_i)
-
-                if D_test is not None:
-                    reps_test_i = sess.run([CFR.h_rep], feed_dict={CFR.x: D_test['x'], \
-                        CFR.do_in: 1.0, CFR.do_out: 0.0})
-                    reps_test.append(reps_test_i)
 
     return losses, preds_train, preds_test, reps, reps_test
 
@@ -342,11 +386,16 @@ def run(outdir):
     ''' Initialize input placeholders '''
     if FLAGS.rnn:
         problem_set = FLAGS.ps
-        file_path = '../lstm-autoencoder/'+str(problem_set)+'_sq_train_data.csv'
+        trainable_embed = FLAGS.trainable_embed
+        if trainable_embed:
+            file_path = '../lstm-autoencoder/'+str(problem_set)+'_sq_train_data.csv'
+        else:
+            file_path = '../lstm-autoencoder/'+str(problem_set)+'_pl_train_data.csv'
         hidden_num = FLAGS.hidden_num
         pl_df = pd.read_csv(file_path)
         # the number of features
-        elem_num = len(pl_df.columns)-2
+        d_num = 3 if trainable_embed else 2
+        elem_num = len(pl_df.columns)-d_num
         # group by students
         pl_df.set_index('id', inplace=True)
         pl_g = pl_df.groupby('user_id')
@@ -360,8 +409,18 @@ def run(outdir):
         print 'max len {}'.format(max_len)
         print 'avg len {}'.format(avg_len)
         print 'max max len {}'.format(max_max_len)
-
         max_len = min(max_len, max_max_len)
+        if trainable_embed:
+            # load ps list
+            if FLAGS.rnn:
+                ps_file = '../lstm-autoencoder/'+str(problem_set)+'_ps_index'
+            else:
+                ps_file = '../lstm-autoencoder/2016_ps_index'
+            ps_list = []
+            with open(ps_file) as f:
+                for line in f:
+                    ps_list.append(int(line))
+            sq_embed_idx = tf.placeholder(tf.int32, [None, max_len])
         #max_len = 1000
         for i in range(len(cnt_list)):
             if cnt_list[i] > max_len:
@@ -371,15 +430,30 @@ def run(outdir):
         user_list = pl_df['user_id'].unique().tolist()
         x_dict = {}
         len_dict = {}
+        if trainable_embed:
+            ps_dict = {}
         for ite in user_list:
-            m = pl_g.get_group(ite).iloc[:, :-1].as_matrix()
+            m = pl_g.get_group(ite).iloc[:, :-1*(d_num-1)].as_matrix()
+            if trainable_embed:
+                seq_ids = pl_g.get_group(ite)['sequence_id'].tolist()
+                embed_ids = []
+                for seq_id in seq_ids:
+                    if seq_id in ps_list:
+                        tmp_idx = ps_list.index(seq_id)
+                        embed_ids.append(tmp_idx)
+                    else:
+                        embed_ids.append(len(ps_list))
             if max_len >= m.shape[0]:
                 len_dict[ite] = m.shape[0]
                 diff = max_len - m.shape[0]
                 x_dict[ite] = np.pad(m, ((0,diff), (0,0)), mode='constant', constant_values=0)
+                if trainable_embed:
+                    ps_dict[ite] = embed_ids + [0]*diff
             else:
                 len_dict[ite] = max_len
                 x_dict[ite] = m[-1*max_len:, :]
+                if trainable_embed:
+                    ps_dict[ite] = embed_ids[-1*max_len:]
 
         # load user ids from exp data
         data = np.loadtxt(open(dataform,"rb"),delimiter=",")
@@ -388,10 +462,20 @@ def run(outdir):
         test_user_ids = test_data[:, 1]
 
         p_input = tf.placeholder(tf.float32, [None, max_len, elem_num])
+        if FLAGS.trainable_embed:
+            embedding_size = 10
+            # look up embeddings
+            W = tf.get_variable('W', shape=[len(ps_list)+1, embedding_size],
+                                initializer=tf.contrib.layers.xavier_initializer())
+            sq_embed = tf.nn.embedding_lookup(W, sq_embed_idx)
+            cell_input = tf.reshape(tf.expand_dims(sq_embed, -2) * tf.expand_dims(p_input, -1),
+                                 [-1, max_len, embedding_size*elem_num])
+        else:
+            cell_input = p_input
         cell = tf.nn.rnn_cell.GRUCell(hidden_num)
         cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=do_in)
         seq_len = tf.placeholder(tf.int32, [None])
-        z_codes, enc_state = tf.nn.dynamic_rnn(cell, p_input, seq_len, dtype=tf.float32)
+        z_codes, enc_state = tf.nn.dynamic_rnn(cell, cell_input, seq_len, dtype=tf.float32)
         x = enc_state
         dims = [hidden_num, FLAGS.dim_in, FLAGS.dim_out]
     else:
@@ -493,9 +577,15 @@ def run(outdir):
         ''' Run training loop '''
         # pass more parameters: p_input, seq_len, rnn
         if FLAGS.rnn:
-            losses, preds_train, preds_test, reps, reps_test = train(CFR, sess, train_step, D_exp, I_valid,
-                                                                     D_exp_test, logfile, i_exp, user_ids, test_user_ids, x_dict,
-                                                                     len_dict, p_input, seq_len)
+            if FLAGS.trainable_embed:
+                losses, preds_train, preds_test, reps, reps_test = train(CFR, sess, train_step, D_exp, I_valid,
+                                                                         D_exp_test, logfile, i_exp, user_ids, test_user_ids, x_dict,
+                                                                         len_dict, p_input, seq_len, ps_dict, sq_embed_idx)
+            else:
+                losses, preds_train, preds_test, reps, reps_test = train(CFR, sess, train_step, D_exp, I_valid,
+                                                                         D_exp_test, logfile, i_exp, user_ids, test_user_ids, x_dict,
+                                                                         len_dict, p_input, seq_len)
+
         else:
             losses, preds_train, preds_test, reps, reps_test = train(CFR, sess, train_step, D_exp, I_valid,
                                                                      D_exp_test, logfile, i_exp)

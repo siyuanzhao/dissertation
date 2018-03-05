@@ -225,11 +225,12 @@ class cfr_net(object):
         biases_out = []
 
         # intermediate layers
-        mo = self._create_variable_with_weight_decay(
-            tf.random_normal([dims[0], dims[0]],
-                             stddev=FLAGS.weight_init/np.sqrt(dims[0])),'w_mid_%d' % 1, 1.0)
-        mb = tf.Variable(tf.zeros([1,dims[0]]))
-        h_input = self.nonlin(tf.matmul(h_input, mo) + mb)
+        if False:
+            mo = self._create_variable_with_weight_decay(
+                tf.random_normal([dims[0], dims[0]],
+                                 stddev=FLAGS.weight_init/np.sqrt(dims[0])),'w_mid_%d' % 1, 1.0)
+            mb = tf.Variable(tf.zeros([1,dims[0]]))
+            h_input = self.nonlin(tf.matmul(h_input, mo) + mb)
         h_out = [h_input]
         # output layers
         for i in range(0, FLAGS.n_out):
