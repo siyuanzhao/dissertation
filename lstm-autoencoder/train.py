@@ -6,6 +6,9 @@ import tensorflow as tf
 from LSTMAutoencoder import LSTMAutoencoder
 from random import shuffle
 import sys
+import os
+import argparse
+
 tf.set_random_seed(2016)
 np.random.seed(2016)
 def save_dict(di_, filename_):
@@ -16,38 +19,53 @@ def load_dict(filename_):
     with open(filename_, 'rb') as f:
         ret_di = pickle.load(f)
     return ret_di
+# get hyperparameters from terminal
+parser = argparse.ArgumentParser(description='Hyper parameters for the model')
+parser.add_argument('-is_training', action="store", default=1, dest="is_training", type=int)
+parser.add_argument('-ps', action="store", default=255116, dest="problem_set", type=int)
+opts = parser.parse_args(sys.argv[1:])
 
 # Constants
-trainable_embed = True
-is_training = False
-batch_num = 200
+trainable_embed = False
+is_training = opts.is_training
+batch_num = 50
 hidden_num = 30
-iteration = 100
-is_ps = False
+iteration = 150
+is_ps = True
 #max_max_len = 1500
-problem_set = 255116
+problem_set = opts.problem_set
+directory = 'lstm-autoencoder/'
+model_folder = directory+'saved_models'
+result_folder = directory+'results'
+# create folder
+if not os.path.exists(model_folder):
+    os.makedirs(model_folder)
+if not os.path.exists(result_folder):
+    os.makedirs(result_folder)
 
 if is_ps:
-    model_name = str(problem_set)+'_feb27_gru_dropout_reverse'
+    model_name = model_folder+'/'+str(problem_set)+'_gru_dropout_reverse'
+    ps_idx_file = directory+str(problem_set) + '_ps_index'
 else:
-    model_name = 'this_one_gru_dropout_reverse_march4'
+    model_name = model_folder+'/this_one_gru_dropout_reverse_march6'
+    ps_idx_file = directory+'this_one_ps_index'
 
 #file_path = str(problem_set)+'_extra_pl_train_data.csv'
 if is_training:
     #file_path = 'this_one_pl_train_data.csv'
     if is_ps:
-        file_path = str(problem_set)+'_pl_train_data.csv'
+        file_path = directory+str(problem_set)+'_sq_train_data.csv'
     else:
-        file_path = 'this_one_sq_train_data.csv'
+        file_path = directory+'this_one_train_data.csv'
 else:
     if is_ps:
-        file_path = str(problem_set) + '_pl_train_data.csv'
+        file_path = directory+str(problem_set) + '_sq_train_data.csv'
     else:
-        file_path = str(problem_set) + '_sq_train_data.csv'
+        file_path = directory+str(problem_set) + '_sq_train_data.csv'
 
 # read csv file
 pl_df = pd.read_csv(file_path)
-d_num = 3 if trainable_embed else 2
+d_num = 3
 
 # the number of features
 elem_num = len(pl_df.columns)-d_num
@@ -60,7 +78,7 @@ for name,group in pl_g:
     cnt_list.append(cnt)
 max_len = max(cnt_list)
 avg_len = sum(cnt_list)/len(cnt_list)
-max_max_len = int(np.percentile(cnt_list, 75))
+max_max_len = int(np.percentile(cnt_list, 70))
 #max_max_len = 280
 print 'max len {}'.format(max_len)
 print 'avg len {}'.format(avg_len)
@@ -78,52 +96,51 @@ user_list = pl_df['user_id'].unique().tolist()
 # placeholder list
 p_input = tf.placeholder(tf.float32, [None, max_len, elem_num])
 
-cell = tf.nn.rnn_cell.GRUCell(hidden_num)
+enc_cell = tf.nn.rnn_cell.GRUCell(hidden_num)
+#dec_cell = tf.nn.rnn_cell.GRUCell(hidden_num)
+dec_cell = enc_cell
 #cell = tf.nn.rnn_cell.LSTMCell(hidden_num, use_peepholes=True)
-if is_training:
-    cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=0.8)
+#if is_training:
+#    cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=0.8)
+
+ps_list = []
+with open(ps_idx_file) as f:
+    for line in f:
+        ps_list.append(int(line))
 
 if trainable_embed:
-    # load ps list
-    ps_list = []
-    with open('../lstm-autoencoder/2016_ps_index') as f:
-        for line in f:
-            ps_list.append(int(line))
     ae = LSTMAutoencoder(
-        hidden_num, p_input, max_len, cell=cell, reverse=True, embedding_size=10,
+        hidden_num, p_input, max_len, cell=[enc_cell, dec_cell], reverse=True, embedding_size=10,
         trainable_embed=True,ps_cnt=len(ps_list))
 else:
-    ae = LSTMAutoencoder(hidden_num, p_input, max_len, cell=cell, reverse=True)
+    ae = LSTMAutoencoder(hidden_num, p_input, max_len, cell=[enc_cell, dec_cell], reverse=True, ps_cnt=len(ps_list))
 # should do the padding only once
 len_dict = {}
 x_dict = {}
-if trainable_embed:
-    ps_dict = {}
+ps_dict = {}
 
 for ite in user_list:
     m = pl_g.get_group(ite).iloc[:, :-1*(d_num-1)].as_matrix()
-    if trainable_embed:
-        seq_ids = pl_g.get_group(ite)['sequence_id'].tolist()
-        embed_ids = []
-        for seq_id in seq_ids:
-            if seq_id in ps_list:
-                tmp_idx = ps_list.index(seq_id)
-                embed_ids.append(tmp_idx)
-            else:
-                embed_ids.append(len(ps_list))
+    seq_ids = pl_g.get_group(ite)['sequence_id'].tolist()
+    embed_ids = []
+
+    for seq_id in seq_ids:
+        if seq_id in ps_list:
+            tmp_idx = ps_list.index(seq_id)
+            embed_ids.append(tmp_idx)
+        else:
+            embed_ids.append(len(ps_list))
 
     if max_len >= m.shape[0]:
         len_dict[ite] = m.shape[0]
         diff = max_len - m.shape[0]
         x_dict[ite] = np.pad(m, ((0,diff), (0,0)), mode='constant', constant_values=0)
-        if trainable_embed:
-            ps_dict[ite] = embed_ids + [0]*diff
+        ps_dict[ite] = embed_ids + [0]*diff
         
     else:
         len_dict[ite] = max_len
         x_dict[ite] = m[-1*max_len:, :]
-        if trainable_embed:
-            ps_dict[ite] = embed_ids[-1*max_len:]
+        ps_dict[ite] = embed_ids[-1*max_len:]
         
 def prepare_data(c, len_dict, x_dict, ps_dict):
     l = []
@@ -133,8 +150,7 @@ def prepare_data(c, len_dict, x_dict, ps_dict):
     for ite in c:
         batch_len.append(len_dict[ite])
         l.append(x_dict[ite])
-        if trainable_embed:
-            batch_embed.append(ps_dict[ite])
+        batch_embed.append(ps_dict[ite])
 
     x_batch = np.stack(l, axis=0)
     for i, ite in enumerate(batch_len):
@@ -161,13 +177,12 @@ with tf.Session() as sess:
             else:
                 enc = sess.run(ae.enc_state,
                                {p_input:x_batch, ae.seq_len:batch_len,
-                                ae.gather_index: gather_index})
+                                ae.gather_index: gather_index, ae.sq_embed_idx:batch_embed})
             
             res.append(enc)
         res = np.concatenate(res)
         res_dict = dict(zip(user_list, res))
-        save_dict(res_dict, str(problem_set)+'_result.pkl')
-        print res_dict
+        save_dict(res_dict, result_folder+'/'+str(problem_set)+'_result.pkl')
         exit()
 
     min_loss = sys.maxint
@@ -188,10 +203,10 @@ with tf.Session() as sess:
                     {ae.sq_embed_idx:batch_embed, p_input:x_batch, ae.seq_len:batch_list,
                      ae.gather_index: gather_index})
             else:
-                loss_val, out, _, global_step = sess.run(
-                    [ae.loss, ae.output_, ae.train, ae.global_step],
+                loss_val, out, _, global_step, input_, output_ = sess.run(
+                    [ae.loss, ae.output_, ae.train, ae.global_step, ae.input_, ae.output_],
                     {p_input:x_batch, ae.seq_len:batch_list,
-                     ae.gather_index: gather_index})
+                     ae.gather_index: gather_index, ae.sq_embed_idx:batch_embed})
             total_loss += loss_val
         print "iter %d:" % (i+1), total_loss
         if (i+1)% 10 == 0 and min_loss > total_loss:
