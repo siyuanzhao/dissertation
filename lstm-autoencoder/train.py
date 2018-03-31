@@ -28,7 +28,7 @@ opts = parser.parse_args(sys.argv[1:])
 # Constants
 trainable_embed = False
 is_training = opts.is_training
-batch_num = 50
+batch_num = 100
 hidden_num = 30
 iteration = 150
 is_ps = True
