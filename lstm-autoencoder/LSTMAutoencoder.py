@@ -37,29 +37,30 @@ class LSTMAutoencoder(object):
     inputs = p_input
     self.seq_len = tf.placeholder(tf.int32, [None])
     self.gather_index = tf.placeholder(tf.int32, [None])
-
+    self.sq_embed_idx = tf.placeholder(tf.int32, [None, max_len])
     self.batch_num = tf.shape(inputs)[0]
     batch_size = inputs.get_shape().as_list()[0]
     feature_num = inputs.get_shape().as_list()[2]
     self.global_step = tf.Variable(0, name="global_step", trainable=False)
     if cell is None:
-      self._enc_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_num)
-      self._dec_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_num)
+      self._enc_cell = tf.nn.rnn_cell.GRUCell(hidden_num)
+      self._dec_cell = tf.nn.rnn_cell.GRUCell(hidden_num)
     else:
-      self._enc_cell = cell
-      self._dec_cell = cell
+      self._enc_cell = cell[0]
+      self._dec_cell = cell[1]
 
     if trainable_embed:
       self.elem_num = embedding_size*feature_num
-      self.sq_embed_idx = tf.placeholder(tf.int32, [None, max_len])
       W = tf.get_variable('W', shape=[ps_cnt+1, embedding_size],
                           initializer=tf.contrib.layers.xavier_initializer())
       sq_embed = tf.nn.embedding_lookup(W, self.sq_embed_idx)
       cell_input = tf.reshape(tf.expand_dims(sq_embed, -2) * tf.expand_dims(p_input, -1),
                                  [-1, max_len, self.elem_num])
     else:
-      self.elem_num = feature_num
-      cell_input = p_input
+      self.elem_num = feature_num + ps_cnt + 1
+      # convert to one-hot encoding
+      one_hot = tf.one_hot(self.sq_embed_idx, ps_cnt+1)
+      cell_input = tf.concat([one_hot, inputs], axis=2)
     with tf.variable_scope('encoder'):
       self.z_codes, self.enc_state = tf.nn.dynamic_rnn(
         self._enc_cell, cell_input, self.seq_len, dtype=tf.float32)
@@ -119,8 +120,8 @@ class LSTMAutoencoder(object):
     self.loss = tf.reduce_mean(tf.square(self.input_ - self.output_))
 
     if optimizer is None:
-      #optimizer = tf.train.AdamOptimizer(0.001)
-      optimizer = tf.train.RMSPropOptimizer(0.001)
+      optimizer = tf.train.AdamOptimizer(0.001)
+      #optimizer = tf.train.RMSPropOptimizer(0.001)
       grads_and_vars = optimizer.compute_gradients(self.loss, aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE)
       grads_and_vars = [(tf.clip_by_norm(g, 10), v)
                           for g, v in grads_and_vars if g is not None]
