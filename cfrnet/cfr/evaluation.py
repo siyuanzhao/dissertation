@@ -351,8 +351,6 @@ def evaluate(output_dir, data_path_train, data_path_test=None, binary=False, emb
     else:
         data_test = None
 
-
-
     # Evaluate all results
     eval_results = []
     configs_out = []

@@ -51,7 +51,10 @@ def load_assistments_data(fname, rname='../LSTM-autoencoder/259379_result.pkl', 
         user_list= list(data[:,1])
         x_list = []
         for ite in user_list:
-            x_list.append(xdict[int(ite)])
+            if int(ite) in xdict:
+                x_list.append(xdict[int(ite)])
+            else:
+                x_list.append(np.zeros_like(xdict.values()[0]))
         x = np.stack(x_list, axis=0)
     else:
         x = data[:, 5:-1]

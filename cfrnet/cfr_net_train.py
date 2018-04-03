@@ -61,7 +61,7 @@ tf.app.flags.DEFINE_boolean('rnn', 0, """Whether to use rnn to extract features 
 tf.app.flags.DEFINE_string('ps', '', """The problem set id""")
 tf.app.flags.DEFINE_integer('hidden_num', 50, """The size of hidden layer in rnn""")
 tf.app.flags.DEFINE_boolean('trainable_embed', 0, """when rnn = 1, whether to use embeddings to represent problem sets""")
-
+FLAGS.dim_out = FLAGS.dim_in
 if FLAGS.sparse:
     import scipy.sparse as sparse
 

@@ -52,7 +52,9 @@ def save_used_cfg(cfg, used_cfg_file):
 def run(cfg_file, num_runs):
     configs = load_config(cfg_file)
     ps = sys.argv[3]
-    configs['outdir'] = ['results/'+ps]
+    configs['ps'] = [ps]
+    directory='cfrnet/'
+    configs['outdir'] = [directory+'results/'+ps]
     configs['dataform'] = [ps + '_train_exp.csv']
     configs['data_test'] = [ps + '_test_exp.csv']
     outdir = configs['outdir'][0]
@@ -60,7 +62,7 @@ def run(cfg_file, num_runs):
 
     if sys.argv[4] == '1':
         configs['embeddings'] = [True]
-        configs['rname'] = ['../LSTM-autoencoder/'+ps+'_result.pkl']
+        configs['rname'] = [sys.argv[5]]
     if not os.path.isfile(used_cfg_file):
         f = open(used_cfg_file, 'w')
         f.close()
@@ -79,7 +81,7 @@ def run(cfg_file, num_runs):
         print '\n'.join(['%s: %s' % (str(k), str(v)) for k,v in cfg.iteritems() if len(configs[k])>1])
 
         flags = ' '.join('--%s %s' % (k,str(v)) for k,v in cfg.iteritems())
-        call('python cfr_net_train.py %s' % flags, shell=True)
+        call('python ./'+directory+'cfr_net_train.py %s' % flags, shell=True)
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

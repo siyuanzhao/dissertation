@@ -8,8 +8,8 @@ import glob
 # input file: this_one.csv
 # example of output file: ps_exp.csv, ps_train_exp.csv, ps_test_exp.csv
 # hyperparameters
-ps_list = [237447, 246627]
-is_video_list = [False, False]
+ps_list = [241622,243393, 246482, 246647, 255116, 263052]
+is_video_list = [False, False, False, False, False, True]
 for idx, ps in enumerate(ps_list):
     is_video = is_video_list[idx]
     directory = '22-Experiments/' + str(ps)

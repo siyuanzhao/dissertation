@@ -39,7 +39,7 @@ def evaluate(config_file, overwrite=False, filters=None, embeddings=False, rname
 
     cfg = load_config(config_file)
 
-    output_dir = 'results/'+ps
+    output_dir = 'cfrnet/results/'+ps
 
     if not os.path.isdir(output_dir):
         raise Exception('Could not find output at path: %s' % output_dir)
@@ -75,10 +75,10 @@ def evaluate(config_file, overwrite=False, filters=None, embeddings=False, rname
         plot_evaluation_cont(eval_results, configs, output_dir, data_train, data_test, filters)
 
     # Plot evaluation
-    #if configs[0]['loss'] == 'log':
-    #    plot_cfr_evaluation_bin(eval_results, configs, output_dir)
-    #else:
-    #    plot_cfr_evaluation_cont(eval_results, configs, output_dir)
+    if configs[0]['loss'] == 'log':
+        plot_cfr_evaluation_bin(eval_results, configs, output_dir)
+    else:
+        plot_cfr_evaluation_cont(eval_results, configs, output_dir)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
