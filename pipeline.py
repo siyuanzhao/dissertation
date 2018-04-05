@@ -7,11 +7,21 @@ import glob
 # prepare experimental data
 # input file: this_one.csv
 # example of output file: ps_exp.csv, ps_train_exp.csv, ps_test_exp.csv
+
 # hyperparameters
-ps_list = [241622,243393, 246482, 246647, 255116, 263052]
-is_video_list = [False, False, False, False, False, True]
+# using sea representation
+is_sea = 1
+all_ps_list = [241622,243393, 246482, 246647, 255116, 263052, 259379, 237447, 246627, 250476, 226210, 303899]
+is_video_list = [False, False, False, False, False, True, True, False, False, True, False, False]
+ps_video_dict = {}
+for idx, ps in enumerate(all_ps_list):
+    ps_video_dict[ps] = is_video_list[idx]
+ps_list = [259379]
+#ps_list = [241622]
+#is_video_list = [False]
+
 for idx, ps in enumerate(ps_list):
-    is_video = is_video_list[idx]
+    is_video = ps_video_dict[ps]
     directory = '22-Experiments/' + str(ps)
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -170,4 +180,6 @@ for idx, ps in enumerate(ps_list):
         os.system('python lstm-autoencoder/train.py -is_training 1 -ps '+str(ps))
     if not os.path.isfile(result_file):
         os.system('python lstm-autoencoder/train.py -is_training 0 -ps '+str(ps))
-    os.system('./cfrnet/assistments_exp.sh '+str(ps))
+    os.system('./cfrnet/assistments_exp.sh {} {}'.format(ps, is_sea))
+    folder_path = 'cfrnet/results/'+str(ps)+'/'
+    os.system('python result_analysis.py -ps {} -folder_path {}'.format(ps, folder_path))
