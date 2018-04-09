@@ -65,15 +65,15 @@ class LSTMAutoencoder(object):
       self.z_codes, self.enc_state = tf.nn.dynamic_rnn(
         self._enc_cell, cell_input, self.seq_len, dtype=tf.float32)
 
-    with tf.variable_scope('decoder') as vs:
-      dec_weight_ = tf.Variable(
-        tf.truncated_normal([hidden_num, self.elem_num], dtype=tf.float32),
-        name="dec_weight")
-      dec_bias_ = tf.Variable(
-        tf.constant(0.1, shape=[self.elem_num], dtype=tf.float32),
-        name="dec_bias")
-
       if decode_without_input:
+        with tf.variable_scope('decoder') as vs:
+          dec_weight_ = tf.Variable(
+            tf.truncated_normal([hidden_num, self.elem_num], dtype=tf.float32),
+            name="dec_weight")
+          dec_bias_ = tf.Variable(
+            tf.constant(0.1, shape=[self.elem_num], dtype=tf.float32),
+            name="dec_bias")
+        
         #dec_inputs = [tf.zeros(tf.shape(inputs[0]), dtype=tf.float32)
         #              for _ in range(len(inputs))]
         dec_inputs = tf.zeros_like(inputs)
@@ -95,6 +95,23 @@ class LSTMAutoencoder(object):
         self.output_ = tf.matmul(dec_output_, dec_weight_) + dec_bias_
 
       else:
+        # added for softmax at final layer
+        with tf.variable_scope('decoder') as vs:
+          dec_softmax_weight_ = tf.Variable(
+            tf.truncated_normal([hidden_num, ps_cnt+1], dtype=tf.float32),
+            name="dec_soft_weight")
+          dec_softmax_bias_ = tf.Variable(
+            tf.constant(0.1, shape=[ps_cnt+1], dtype=tf.float32),
+            name="dec_soft_bias")
+          dec_sigmoid_weight_ = tf.Variable(
+            tf.truncated_normal([hidden_num, feature_num], dtype=tf.float32),
+            name="dec_sig_weight")
+          dec_sigmoid_bias_ = tf.Variable(
+            tf.constant(0.1, shape=[feature_num], dtype=tf.float32),
+            name="dec_soft_bias")
+          
+        # end of softmax at final layer
+
         dec_state = self.enc_state
         shape_list = inputs.get_shape().as_list()
         dec_input_ = tf.zeros([self.batch_num,self.elem_num], dtype=tf.float32)
@@ -103,7 +120,10 @@ class LSTMAutoencoder(object):
           if step>0:
             vs.reuse_variables()
           dec_input_, dec_state = self._dec_cell(dec_input_, dec_state)
-          dec_input_ = tf.sigmoid(tf.matmul(dec_input_, dec_weight_) + dec_bias_)
+          dec_soft_input_ = tf.nn.softmax(tf.matmul(dec_input_, dec_softmax_weight_)+dec_softmax_bias_)
+          dec_sig_input_ = tf.sigmoid(tf.matmul(dec_input_, dec_sigmoid_weight_)+dec_sigmoid_bias_)
+          dec_input_ = tf.concat([dec_soft_input_, dec_sig_input_], 1)
+          #dec_input_ = tf.sigmoid(tf.matmul(dec_input_, dec_weight_) + dec_bias_)
           #dec_input_ = tf.matmul(dec_input_, dec_weight_) + dec_bias_
           dec_outputs.append(dec_input_)
         if reverse:
