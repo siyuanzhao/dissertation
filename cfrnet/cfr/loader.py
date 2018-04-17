@@ -88,6 +88,7 @@ def load_results(output_dir):
     results = []
     for dir in exp_dirs:
         dir_result = load_single_result(dir)
+        dir_result['path'] = dir
         if dir_result is not None:
             results.append(dir_result)
 
@@ -103,7 +104,11 @@ def load_assistments_data(datapath, rname='../LSTM-autoencoder/259379_result.pkl
         user_list= list(data[:,1])
         x_list = []
         for ite in user_list:
-            x_list.append(xdict[int(ite)])
+            if int(ite) in xdict:
+                x_list.append(xdict[int(ite)])
+            else:
+                x_list.append(np.zeros_like(xdict.values()[0]))
+            
         x = np.stack(x_list, axis=0)
         x = np.expand_dims(x, axis=-1)
     else:

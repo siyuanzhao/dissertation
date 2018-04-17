@@ -187,14 +187,14 @@ def evaluate_bin_att(predictions, data, i_exp, I_subset=None,
             'policy_curve': policy_curve, 'pehe_nn': pehe_appr}
 
 def evaluate_cont_ate(predictions, data, i_exp, I_subset=None,
-    compute_policy_curve=False, nn_t=None, nn_c=None):
+                      compute_policy_curve=False, nn_t=None, nn_c=None):
 
     x = data['x'][:,:,i_exp]
     t = data['t'][:,i_exp]
     yf = data['yf'][:,i_exp]
-    ycf = data['ycf'][:,i_exp]
-    mu0 = data['mu0'][:,i_exp]
-    mu1 = data['mu1'][:,i_exp]
+    #ycf = data['ycf'][:,i_exp]
+    #mu0 = data['mu0'][:,i_exp]
+    #mu1 = data['mu1'][:,i_exp]
     yf_p = predictions[:,0]
     ycf_p = predictions[:,1]
 
@@ -204,32 +204,32 @@ def evaluate_cont_ate(predictions, data, i_exp, I_subset=None,
         yf_p = yf_p[I_subset]
         ycf_p = ycf_p[I_subset]
         yf = yf[I_subset]
-        ycf = ycf[I_subset]
-        mu0 = mu0[I_subset]
-        mu1 = mu1[I_subset]
+        #ycf = ycf[I_subset]
+        #mu0 = mu0[I_subset]
+        #mu1 = mu1[I_subset]
 
-    eff = mu1-mu0
+    #eff = mu1-mu0
 
     rmse_fact = np.sqrt(np.mean(np.square(yf_p-yf)))
-    rmse_cfact = np.sqrt(np.mean(np.square(ycf_p-ycf)))
+    #rmse_cfact = np.sqrt(np.mean(np.square(ycf_p-ycf)))
 
-    eff_pred = ycf_p - yf_p;
-    eff_pred[t>0] = -eff_pred[t>0];
+    eff_pred = ycf_p - yf_p
+    eff_pred[t>0] = -eff_pred[t>0]
 
     ite_pred = ycf_p - yf
     ite_pred[t>0] = -ite_pred[t>0]
-    rmse_ite = np.sqrt(np.mean(np.square(ite_pred-eff)))
+    #rmse_ite = np.sqrt(np.mean(np.square(ite_pred-eff)))
 
     ate_pred = np.mean(eff_pred)
-    bias_ate = ate_pred-np.mean(eff)
+    #bias_ate = ate_pred-np.mean(eff)
 
     att_pred = np.mean(eff_pred[t>0])
-    bias_att = att_pred - np.mean(eff[t>0])
+    #bias_att = att_pred - np.mean(eff[t>0])
 
     atc_pred = np.mean(eff_pred[t<1])
-    bias_atc = atc_pred - np.mean(eff[t<1])
+    #bias_atc = atc_pred - np.mean(eff[t<1])
 
-    pehe = np.sqrt(np.mean(np.square(eff_pred-eff)))
+    #pehe = np.sqrt(np.mean(np.square(eff_pred-eff)))
 
     pehe_appr = pehe_nn(yf_p, ycf_p, yf, x, t, nn_t, nn_c)
 
@@ -237,10 +237,7 @@ def evaluate_cont_ate(predictions, data, i_exp, I_subset=None,
     #policy_value, policy_curve = policy_val(t, yf, eff_pred, compute_policy_curve)
 
     return {'ate_pred': ate_pred, 'att_pred': att_pred,
-            'atc_pred': atc_pred, 'bias_ate': bias_ate,
-            'bias_att': bias_att, 'bias_atc': bias_atc,
-            'rmse_fact': rmse_fact, 'rmse_cfact': rmse_cfact,
-            'pehe': pehe, 'rmse_ite': rmse_ite, 'pehe_nn': pehe_appr}
+            'atc_pred': atc_pred, 'rmse_fact': rmse_fact, 'pehe_nn': pehe_appr}
             #'policy_value': policy_value, 'policy_curve': policy_curve}
 
 def evaluate_result(result, data, validation=False,
