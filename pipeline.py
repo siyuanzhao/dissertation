@@ -11,14 +11,13 @@ import glob
 # hyperparameters
 # using sea representation
 is_sea = 1
-all_ps_list = [241622,243393, 246482, 246647, 255116, 263052, 259379, 237447, 246627, 250476, 226210, 303899]
-is_video_list = [False, False, False, False, False, True, True, False, False, True, False, False]
+all_ps_list = [241622,243393, 246482, 246647, 255116, 263052, 259379, 237447, 246627, 250476, 226210, 303899, 263115, 627695, 694197]
+this_one_list = [241622,243393, 246482, 246647, 255116, 263052, 259379, 237447, 246627, 250476, 226210, 303899, 263115]
+is_video_list = [False, False, False, False, False, True, True, False, False, True, False, False, True, True, False]
 ps_video_dict = {}
 for idx, ps in enumerate(all_ps_list):
     ps_video_dict[ps] = is_video_list[idx]
-ps_list = [259379]
-#ps_list = [241622]
-#is_video_list = [False]
+ps_list = [694197]
 
 for idx, ps in enumerate(ps_list):
     is_video = ps_video_dict[ps]
@@ -102,15 +101,19 @@ for idx, ps in enumerate(ps_list):
     data_file = directory + str(problem_set)+'_sq_train_data.csv'
     ps_index = directory + str(problem_set)+'_ps_index'
 
-    if not os.path.isfile(data_file):
-        pl_df = pd.read_csv(directory+'this_one_problem_logs_seq.csv')
-        pl_df['formatted_start_time'] = pd.to_datetime(pl_df['start_time'])
+    if not os.path.isfile(data_file) and is_sea:
+        if ps in this_one_list:
+            pl_df = pd.read_csv(directory+'this_one_problem_logs_seq.csv')
+        else:
+            pl_df = pd.read_csv(directory+str(ps)+'_problem_logs.csv')
 
-        date_before = datetime.date(2016, 8, 1)
+        #pl_df['formatted_start_time'] = pd.to_datetime(pl_df['start_time'])
 
-        print 'the number of students {}'.format(len(pl_df['user_id'].unique()))
+        #date_before = datetime.date(2016, 8, 1)
 
-        pl_df = pl_df[pl_df['formatted_start_time'] < date_before].reset_index()
+        #print 'the number of students {}'.format(len(pl_df['user_id'].unique()))
+
+        #pl_df = pl_df[pl_df['formatted_start_time'] < date_before].reset_index()
 
         print 'the number of students {}'.format(len(pl_df['user_id'].unique()))
         # read one experiment
@@ -176,9 +179,9 @@ for idx, ps in enumerate(ps_list):
     result_file = directory+str(ps)+'_result.pkl'
     model_folder = 'lstm-autoencoder/saved_models'
     model_file = model_folder+'/'+str(ps)+'_gru_dropout_reverse*'
-    if not glob.glob(model_file):
+    if not glob.glob(model_file) and is_sea:
         os.system('python lstm-autoencoder/train.py -is_training 1 -ps '+str(ps))
-    if not os.path.isfile(result_file):
+    if not os.path.isfile(result_file) and is_sea:
         os.system('python lstm-autoencoder/train.py -is_training 0 -ps '+str(ps))
     os.system('./cfrnet/assistments_exp.sh {} {}'.format(ps, is_sea))
     folder_path = 'cfrnet/results/'+str(ps)+'/'
